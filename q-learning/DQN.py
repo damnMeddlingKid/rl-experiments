@@ -110,12 +110,13 @@ for frame in xrange(1000000):
 
     for play in xrange(4):
         current_state = {state_input: [state_vector]}
-        current_q = q_function.eval(current_state, session=sess)[0]
 
-        current_action = np.argmax(current_q)
-
+        #epsilon greedy
         if np.random.rand(1)[0] < EPSILON or len(REPLAY_MEMORY) < REPLAY_START_SIZE:
             current_action = env.action_space.sample()
+        else:
+            current_q = q_function.eval(current_state, session=sess)[0]
+            current_action = np.argmax(current_q)
 
         state_frame, reward, finished_episode, _ = env.step(current_action)
         next_state = update_state_vector(state_vector, state_frame)
