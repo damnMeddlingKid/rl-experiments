@@ -5,8 +5,8 @@ from scipy.misc import imresize
 import numpy as np
 
 STATE_FRAMES = 4
-STATE_FRAME_WIDTH = 84
-STATE_FRAME_HEIGHT = 84
+STATE_FRAME_WIDTH = 80
+STATE_FRAME_HEIGHT = 80
 DISCOUNT = 0.99
 BATCH_SIZE = 32
 EPSILON = 1
@@ -23,11 +23,19 @@ env.reset()
 def grey_scale(rgb):
     return np.dot(rgb[..., :3], [0.299, 0.587, 0.114])
 
+def normalized_image(observation):
+    temp = np.zeros((observation.shape[0], observation.shape[1]), dtype=np.uint8)  # Blank array for new image
 
-def normalized_image(input_image):
-    output_image = grey_scale(input_image)
-    output_image = imresize(output_image, (STATE_FRAME_WIDTH, STATE_FRAME_HEIGHT))
-    return output_image
+    # Luminosity grayscale
+    temp[:, :] += (.2126 * observation[:, :, 0]).astype(np.uint8)
+    temp[:, :] += (.7156 * observation[:, :, 1]).astype(np.uint8)
+    temp[:, :] += (.0722 * observation[:, :, 2]).astype(np.uint8)
+
+    # Downsample
+    temp = temp[::2, ::2]
+
+    # Crop
+    return temp[17:-8, :]
 
 
 def update_state_vector(state_vector, new_frame):
@@ -37,19 +45,18 @@ def update_state_vector(state_vector, new_frame):
     return new_state_vector
 
 sess=tf.Session()
-saver = tf.train.import_meta_graph('/Users/franklyndsouza/dev/rl-experiments/models/tmp/model.ckpt.meta')
-saver.restore(sess,  '/Users/franklyndsouza/dev/rl-experiments/models/tmp/model.ckpt')
+saver = tf.train.import_meta_graph('/Users/franklyndsouza/dev/rl-experiments/models/model.ckpt.meta')
+saver.restore(sess,  '/Users/franklyndsouza/dev/rl-experiments/models/model.ckpt')
 graph = tf.get_default_graph()
 print [n.name for n in tf.get_default_graph().as_graph_def().node]
 
-state_input = graph.get_tensor_by_name("Placeholder:0")
-q_function = graph.get_tensor_by_name("add_4:0")
+state_input = graph.get_tensor_by_name("state_input:0")
+q_function = graph.get_tensor_by_name("q_function/BiasAdd:0")
 
 
 state_0 = grey_scale(env.reset())
 state_0 = np.stack([state_0] * STATE_FRAMES, axis=2)
 state_vector = imresize(state_0, (STATE_FRAME_WIDTH, STATE_FRAME_HEIGHT))
-
 env.step(1)
 
 for frame in xrange(1000000):
@@ -58,10 +65,9 @@ for frame in xrange(1000000):
 
     current_state = {state_input: [state_vector]}
     current_q = sess.run(q_function, current_state)[0]
-    print current_q
-    current_action = np.argmax(current_q)
 
-    state_frame, reward, finished_episode, _ = env.step(current_action)
+    current_action = np.argmax(current_q)
+    state_frame, reward, finished_episode, info = env.step(current_action)
 
     next_state = update_state_vector(state_vector, state_frame)
 
