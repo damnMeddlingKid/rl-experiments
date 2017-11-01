@@ -10,7 +10,7 @@ def replay_memory():
 
 
 def test_adding_wrong_shape_fails(replay_memory):
-    with pytest.raises(Exception) as e:
+    with pytest.raises(AssertionError) as e:
         replay_memory.add(np.array([[6]]))
 
     assert "Observation has incorrect shape." in unicode(e.value)
@@ -46,6 +46,15 @@ def test_copy_stored(replay_memory):
     observation[0] = 32
 
     assert replay_memory.get(0) == np.array([9])
+
+
+def test_sampling_too_much_fails(replay_memory):
+    replay_memory.add(np.array([1]))
+
+    with pytest.raises(AssertionError) as e:
+        replay_memory.sample(2)
+
+    assert "Sampling more elements than exist in memory." in unicode(e.value)
 
 
 @pytest.mark.parametrize('dtype', [np.float32, np.uint8, np.int32])

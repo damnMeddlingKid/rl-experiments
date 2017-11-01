@@ -20,7 +20,8 @@ class ReplayMemory(object):
         self._head = (self._head + 1) % self._size
 
     def sample(self, batch_size):
-        indices = np.random.randint(0, self._size, size=batch_size)
+        assert batch_size <= self._head, "Sampling more elements than exist in memory."
+        indices = np.random.randint(0, self._head, size=batch_size)
         return self._memory[indices]
 
     def get(self, idx):
