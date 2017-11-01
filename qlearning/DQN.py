@@ -6,7 +6,7 @@ import tensorflow as tf
 import random
 from collections import deque, namedtuple
 
-env = gym.make('BreakoutNoFrameskip-v4')
+env = gym.make('BreakoutNoFrameskip-v3')
 
 NUM_REPEATS = 4
 STATE_FRAMES = 4
@@ -21,8 +21,9 @@ BATCH_SIZE = 32
 EPSILON = 1
 EPSILON_START = 1
 EPSILON_END = 0.1
-EPSILON_END_FRAME = 250000
-NUM_FRAMES = 1000000
+EPSILON_END_FRAME = 100000
+NUM_EPOCHS = 100000
+NUM_BATCHES = 20
 
 
 def grey_scale(rgb):
@@ -43,12 +44,12 @@ def grey_scale(rgb):
 
 
 def normalized_image(observation):
-    temp = np.zeros((observation.shape[0], observation.shape[1]), dtype=np.uint8)  # Blank array for new image
+    temp = np.zeros((observation.shape[0], observation.shape[1]), dtype=np.float32)  # Blank array for new image
 
     # Luminosity grayscale
-    temp[:, :] += (.2126 * observation[:, :, 0]).astype(np.uint8)
-    temp[:, :] += (.7156 * observation[:, :, 1]).astype(np.uint8)
-    temp[:, :] += (.0722 * observation[:, :, 2]).astype(np.uint8)
+    temp[:, :] += (.2126 * observation[:, :, 0]).astype(np.float32)
+    temp[:, :] += (.7156 * observation[:, :, 1]).astype(np.float32)
+    temp[:, :] += (.0722 * observation[:, :, 2]).astype(np.float32)
 
     # Downsample
     temp = temp[::2, ::2]
@@ -58,7 +59,7 @@ def normalized_image(observation):
 
 
 def update_state_vector(state_vector, new_frame):
-    new_state_vector = np.array(state_vector, copy=True)
+    new_state_vector = np.array(state_vector, copy=True, dtype=np.float32)
     new_state_vector[:, :, :-1] = new_state_vector[:, :, 1:]
     new_state_vector[:, :, -1] = normalized_image(new_frame)
     return new_state_vector
@@ -75,7 +76,8 @@ def Q(state_vector, name):
         kernel_size=[8, 8],
         strides=(4, 4),
         padding="valid",
-        activation=tf.nn.relu
+        activation=tf.nn.relu,
+        name="conv1_{}".format(name)
     )
 
     conv2 = tf.layers.conv2d(
@@ -84,7 +86,8 @@ def Q(state_vector, name):
         kernel_size=[4, 4],
         strides=(2, 2),
         padding="valid",
-        activation=tf.nn.relu
+        activation=tf.nn.relu,
+        name="conv2_{}".format(name)
     )
 
     conv3 = tf.layers.conv2d(
@@ -92,12 +95,13 @@ def Q(state_vector, name):
         filters=64,
         kernel_size=[3, 3],
         padding="valid",
-        activation=tf.nn.relu
+        activation=tf.nn.relu,
+        name="conv3_{}".format(name)
     )
 
     flattened = tf.contrib.layers.flatten(conv3)
 
-    dense1 = tf.layers.dense(inputs=flattened, units=512, activation=tf.nn.relu)
+    dense1 = tf.layers.dense(inputs=flattened, units=512, activation=tf.nn.relu, name="dense1_{}".format(name))
     dense2 = tf.layers.dense(inputs=dense1, units=ACTION_SPACE, name=name)
 
     return dense2
@@ -127,10 +131,10 @@ action_one_hot = tf.one_hot(action_holder, env.action_space.n, 1.0, 0.0, name='a
 
 q_acted = tf.reduce_sum(q_function * action_one_hot, axis=1, name='q_acted')
 q_target = tf.reduce_max(q_target_network, axis=1)
-q_selected_target = reward_input + (1.0 - terminal_mask) * q_target
+q_selected_target = reward_input + (1.0 - terminal_mask) * DISCOUNT * q_target
 
 #loss = tf.losses.mean_squared_error(q_acted, q_selected_target)
-loss = tf.losses.huber_loss(q_acted, q_selected_target)
+loss = tf.losses.huber_loss(q_acted, q_selected_target, reduction='weighted_sum')
 
 tf.summary.scalar('loss', loss)
 tf.summary.scalar('trueQ', tf.reduce_mean(q_selected_target))
@@ -147,8 +151,9 @@ model_update = trainer.minimize(loss, global_step=global_step, var_list=tf.train
 
 sess = tf.Session()
 merged_summaries = tf.summary.merge_all()
-writer = tf.summary.FileWriter('./logs/{}'.format(str(datetime.datetime.now()).split('.')[0]), graph=sess.graph)
+writer = tf.summary.FileWriter('/output/logs/{}'.format(str(datetime.datetime.now()).split('.')[0]), graph=sess.graph)
 sess.run(tf.global_variables_initializer())
+sess.run(update_target_network())
 
 Observation = namedtuple('Observation', ['state', 'action', 'reward', 'next_state', 'terminal'])
 
@@ -165,29 +170,64 @@ ale_info = {'ale.lives': 5}
 # plt.ion()
 # f, axarr = plt.subplots(2,2)
 
-for frame in xrange(NUM_FRAMES):
+
+def evaluate_model(q_function, num_games, env):
+    total_rewards = 0
+    print "Beginnning model evaluation"
+
+    games_played = 0
+
+    while games_played < num_games:
+        state_0 = normalized_image(env.reset())
+        state_0 = np.stack([state_0] * 4, axis=2)
+        state_vector = state_0
+
+        while True:
+            current_state = {state_input: [state_vector]}
+            current_q = sess.run(q_function, current_state)[0]
+
+            current_action = np.argmax(current_q)
+            state_frame, reward, finished_episode, info = env.step(current_action)
+
+            next_state = update_state_vector(state_vector, state_frame)
+
+            state_vector = next_state
+            total_rewards += reward
+
+            if info['ale.lives'] < 5 or finished_episode:
+                games_played += 1
+                break
+
+    print "{} game average reward: ".format(num_games), total_rewards / float(num_games)
+
+
+for epoch in xrange(NUM_EPOCHS):
     if finished_episode:
+
+        if num_episodes % 200 == 0:
+            evaluate_model(q_function, 10, env)
+
         obs = env.reset()
         num_nop = np.random.randint(4, 30, size=1)
         last_four = num_nop - 4
         starter_frames = []
 
         # Perform a null operation to make game stochastic
-        for k in range(num_nop):
+        for k in xrange(num_nop):
             obs, reward, is_terminal, info = env.step(0)
             if k >= last_four:
                 starter_frames.append(obs)
 
         starter_frames = map(normalized_image, starter_frames)
-        state_vector = np.stack(starter_frames, axis=2)
+        state_vector = np.stack(starter_frames, axis=2).astype(np.float32)
 
         if num_episodes % 100 == 0:
-            print "Episode: ", num_episodes, "100 episode avg reward: ", total_episode_reward/100
+            print("Episode: ", num_episodes, "100 episode avg reward: ", total_episode_reward/100)
             total_episode_reward = 0
         num_episodes += 1
 
     for play in xrange(4):
-        EPSILON = (((0.1 -1) / EPSILON_END_FRAME) * frame + 1) if frame < EPSILON_END_FRAME else 0.1
+        EPSILON = (((0.1 -1) / EPSILON_END_FRAME) * epoch + 1) if epoch < EPSILON_END_FRAME else 0.1
         current_state = {state_input: [state_vector]}
 
         if len(REPLAY_MEMORY) < REPLAY_START_SIZE or np.random.rand(1)[0] < EPSILON:
@@ -222,38 +262,39 @@ for frame in xrange(NUM_FRAMES):
 
     # Train a batch
     if len(REPLAY_MEMORY) >= REPLAY_START_SIZE:
-        states = []
-        actions = []
-        next_states = []
-        rewards = []
-        terminal_masks = []
+        for i in xrange(NUM_BATCHES):
+            states = []
+            actions = []
+            next_states = []
+            rewards = []
+            terminal_masks = []
 
-        sample = random.sample(REPLAY_MEMORY, BATCH_SIZE)
+            sample = random.sample(REPLAY_MEMORY, BATCH_SIZE)
 
-        for observation in sample:
-            states.append(observation.state)
-            actions.append(observation.action)
-            next_states.append(observation.next_state)
-            rewards.append(observation.reward)
-            terminal_masks.append(1.0 if observation.terminal else 0.0)
+            for observation in sample:
+                states.append(observation.state)
+                actions.append(observation.action)
+                next_states.append(observation.next_state)
+                rewards.append(observation.reward)
+                terminal_masks.append(1.0 if observation.terminal else 0.0)
 
-        _, summary = sess.run([model_update, merged_summaries], feed_dict={
-            state_input: states,
-            action_holder: actions,
-            target_state_input: next_states,
-            reward_input: rewards,
-            terminal_mask: terminal_masks
-        })
+            _, summary = sess.run([model_update, merged_summaries], feed_dict={
+                state_input: states,
+                action_holder: actions,
+                target_state_input: next_states,
+                reward_input: rewards,
+                terminal_mask: terminal_masks
+            })
 
-        writer.add_summary(summary, frame)
-        writer.flush()
+            writer.add_summary(summary, (epoch * NUM_BATCHES) + i)
+            writer.flush()
 
-    if frame % 1000 == 0:
-        print "Frame: ", frame, "REPLAY MEMORY SIZE: ", len(REPLAY_MEMORY), "EPSILON: ", EPSILON
+    if epoch % 1000 == 0:
+        print("Frame: ", epoch, "REPLAY MEMORY SIZE: ", len(REPLAY_MEMORY), "EPSILON: ", EPSILON)
 
-    if len(REPLAY_MEMORY) > REPLAY_START_SIZE and frame % 10000 == 0:
-        print "swapping network"
+    if len(REPLAY_MEMORY) > REPLAY_START_SIZE and epoch % 10000 == 0:
+        print("swapping network")
         sess.run(update_target_network())
 
 saver = tf.train.Saver()
-save_path = saver.save(sess, "./models/model.ckpt")
+save_path = saver.save(sess, "/output/model.ckpt")

@@ -54,10 +54,12 @@ state_input = graph.get_tensor_by_name("state_input:0")
 q_function = graph.get_tensor_by_name("q_function/BiasAdd:0")
 
 
-state_0 = grey_scale(env.reset())
-state_0 = np.stack([state_0] * STATE_FRAMES, axis=2)
-state_vector = imresize(state_0, (STATE_FRAME_WIDTH, STATE_FRAME_HEIGHT))
-env.step(1)
+state_0 = normalized_image(env.reset())
+state_1 = normalized_image(env.step(0)[0])
+state_2 = normalized_image(env.step(0)[0])
+state_3 = normalized_image(env.step(0)[0])
+
+state_vector = np.stack([state_0, state_1, state_2, state_3], axis=2)
 
 for frame in xrange(1000000):
     if finished_episode:
