@@ -5,6 +5,7 @@ import tensorflow as tf
 
 import random
 from collections import deque, namedtuple
+from replay_memory import ReplayMemory
 
 env = gym.make('BreakoutNoFrameskip-v3')
 
@@ -23,7 +24,7 @@ EPSILON_START = 1
 EPSILON_END = 0.1
 EPSILON_END_FRAME = 100000
 NUM_EPOCHS = 100000
-NUM_BATCHES = 20
+NUM_BATCHES = 3
 
 
 def grey_scale(rgb):
@@ -131,7 +132,7 @@ action_one_hot = tf.one_hot(action_holder, env.action_space.n, 1.0, 0.0, name='a
 
 q_acted = tf.reduce_sum(q_function * action_one_hot, axis=1, name='q_acted')
 q_target = tf.reduce_max(q_target_network, axis=1)
-q_selected_target = reward_input + (1.0 - terminal_mask) * DISCOUNT * q_target
+q_selected_target = reward_input + (1.0 - terminal_mask) * tf.scalar_mul(DISCOUNT, q_target)
 
 #loss = tf.losses.mean_squared_error(q_acted, q_selected_target)
 loss = tf.losses.huber_loss(q_acted, q_selected_target, reduction='weighted_sum')
@@ -204,7 +205,7 @@ def evaluate_model(q_function, num_games, env):
 for epoch in xrange(NUM_EPOCHS):
     if finished_episode:
 
-        if num_episodes % 200 == 0:
+        if num_episodes % 100 == 0:
             evaluate_model(q_function, 10, env)
 
         obs = env.reset()
@@ -227,7 +228,7 @@ for epoch in xrange(NUM_EPOCHS):
         num_episodes += 1
 
     for play in xrange(4):
-        EPSILON = (((0.1 -1) / EPSILON_END_FRAME) * epoch + 1) if epoch < EPSILON_END_FRAME else 0.1
+        EPSILON = 0.5 #(((0.1 -1) / EPSILON_END_FRAME) * epoch + 1) if epoch < EPSILON_END_FRAME else 0.1
         current_state = {state_input: [state_vector]}
 
         if len(REPLAY_MEMORY) < REPLAY_START_SIZE or np.random.rand(1)[0] < EPSILON:

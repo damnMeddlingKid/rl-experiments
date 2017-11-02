@@ -57,6 +57,19 @@ def test_sampling_too_much_fails(replay_memory):
     assert "Sampling more elements than exist in memory." in unicode(e.value)
 
 
+def test_replay_memory_size(replay_memory):
+    replay_memory.add(np.array([1]))
+    replay_memory.add(np.array([1]))
+
+    assert len(replay_memory) == 2
+
+    replay_memory.add(np.array([1]))
+    replay_memory.add(np.array([1]))
+    replay_memory.add(np.array([1]))
+
+    assert len(replay_memory) == 4
+
+
 @pytest.mark.parametrize('dtype', [np.float32, np.uint8, np.int32])
 def test_memory_casts_correctly(dtype):
     replay_memory = ReplayMemory(4, (1,), dtype=dtype)

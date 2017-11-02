@@ -14,3 +14,4 @@ var
 .DS_Store
 models
 tests
+logs

@@ -16,7 +16,7 @@ finished_episode = False
 import matplotlib.pyplot as plt
 plt.ion()
 
-env = gym.make('Breakout-v4')
+env = gym.make('BreakoutNoFrameskip-v0')
 env.reset()
 
 
@@ -50,8 +50,8 @@ saver.restore(sess,  '/Users/franklyndsouza/dev/rl-experiments/models/model.ckpt
 graph = tf.get_default_graph()
 print [n.name for n in tf.get_default_graph().as_graph_def().node]
 
-state_input = graph.get_tensor_by_name("state_input:0")
-q_function = graph.get_tensor_by_name("q_function/BiasAdd:0")
+state_input = graph.get_tensor_by_name("dqn_agent/input_state:0")
+q_function = graph.get_tensor_by_name("dqn_agent/q_value/BiasAdd:0")
 
 
 state_0 = normalized_image(env.reset())
