@@ -14,12 +14,17 @@ class Game(object):
         self._observation_shape = observation_shape
         self._action_repeat = action_repeat
         self._life_ends = life_ends
-        self._current_state = self.reset_state()
+        self._current_state = self._reset_state()
+        self._no_op_count = 0
 
-    def reset_state(self):
+    def _reset_state(self):
         state = History.init_observation(self._observation_shape)
         state = History.new_observation(state, self._env.reset())
         return state
+
+    def reset_game(self):
+        self._no_op_count = 0
+        self._current_state = self._reset_state()
 
     def play_random(self):
         action = self._env.action_space.sample()
@@ -34,17 +39,16 @@ class Game(object):
         for repeat in xrange(self._action_repeat):
             raw_state, reward, game_over, info = self._env.step(action)
             total_reward += reward
-            if game_over or (self._life_ends and info['ale.lives'] < 5):
+            if game_over:
                 terminal = True
-                break
 
         before_state = self._current_state
         after_state = History.new_observation(self._current_state, raw_state)
 
-        if not terminal:
+        if not game_over:
             self._current_state = after_state
         else:
-            self._current_state = self.reset_state()
+            self.reset_game()
 
         return {
             "current_state": before_state,
