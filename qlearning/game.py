@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 import gym
+import numpy as np
 from history import History
 
 
@@ -27,17 +28,20 @@ class Game(object):
         self._current_state = self._reset_state()
 
     def play_random(self):
-        action = self._env.action_space.sample()
-        state_data = self.play(action)
+        space = self._env.action_space.n
+        action = np.random.randint(1, space)
+        state_data = self.play(action - 1)
         return state_data
 
     def play(self, action):
+        action += 1
         total_reward = 0
         terminal = False
         raw_state, reward, game_over, info = None, 0, False, None
 
         for repeat in xrange(self._action_repeat):
             raw_state, reward, game_over, info = self._env.step(action)
+            self._env.render()
             total_reward += reward
             if game_over:
                 terminal = True
@@ -55,5 +59,5 @@ class Game(object):
             "reward": total_reward,
             "terminal": 1.0 if terminal else 0.0,
             "future_state": after_state,
-            "action": action,
+            "action": action - 1,
         }

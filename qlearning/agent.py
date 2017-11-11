@@ -78,7 +78,7 @@ class DQNAgent(object):
 
     def _loss_function(self):
         assert self._target_agent is not None, "Attempting to train agent without target"
-        one_hot = tf.one_hot(self._action, 4, dtype=tf.float32)
+        one_hot = tf.one_hot(self._action, 3, dtype=tf.float32)
         prediction = tf.reduce_sum(tf.multiply(one_hot, self.q_value), axis=1)
         target = self._reward + ((1 - self._terminal) * tf.scalar_mul(self._discount, tf.reduce_max(self._target_agent.q_value, axis=1)))
         loss = tf.reduce_mean(self.clipped_error(target - prediction))

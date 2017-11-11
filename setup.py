@@ -12,21 +12,3 @@ setup(
     description='My trainer application package.'
 )
 
-
-4239150080257023
-
-def printRec(pattern, index=0, previous_message="")
-	if index >= len(pattern)
-		print previous_message 
-		return
-
-	if pattern[index] == '?':
-		for bit in range(2):
-			printRec(pattern, index+1, previous_message + bit)
-	else: 
-		printRec(pattern, index+1, previous_message + pattern[index])
-
-
-
-def printHandler(pattern):
-	printRec(pattern)

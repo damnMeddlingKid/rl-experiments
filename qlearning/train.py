@@ -13,7 +13,7 @@ tf.app.flags.DEFINE_integer("ACTION_REPETITION", 4, "Number of frames to repeat 
 tf.app.flags.DEFINE_integer("HISTORY_SIZE", 4, "Number of frames of past history to model game state.")
 tf.app.flags.DEFINE_integer("HISTORY_WIDTH", 80, "Width of the input frame.")
 tf.app.flags.DEFINE_integer("HISTORY_HEIGHT", 80, "Height of the input frame.")
-tf.app.flags.DEFINE_integer("ACTION_SPACE", 4, "Number of possible output actions.")
+tf.app.flags.DEFINE_integer("ACTION_SPACE", 3, "Number of possible output actions.")
 tf.app.flags.DEFINE_integer("REPLAY_MEMORY_LENGTH", 500000, "Number of historical experiences to store.")
 tf.app.flags.DEFINE_integer("MIN_REPLAY_MEMORY_LENGTH", 50000, "Minimum number of experiences to start training.")
 tf.app.flags.DEFINE_integer("BATCH_SIZE", 32, "Size of mini-batch.")
@@ -80,7 +80,7 @@ def main(_):
     writer = tf.summary.FileWriter(FLAGS.logs_absolute_dir, graph=session.graph)
     session.run(tf.global_variables_initializer())
     main_agent.sync_target(session)
-    saver = tf.train.Saver(max_to_keep=4)
+    saver = tf.train.Saver()
 
     for epoch in xrange(FLAGS.EPOCHS):
         if epoch % 1000 == 0:
@@ -100,15 +100,17 @@ def main(_):
             summary = main_agent.train(session, batch)
             if epoch % 1000 == 0 and iteration == 0:
                 writer.add_summary(summary, epoch)
-                writer.flush()
+
+        if epoch != 0 and epoch % 100000 == 0:
+            print "Checkpointing Network"
+            saver.save(session, "/output/model.ckpt", global_step=epoch)
+            evaluate(session)
 
         if epoch != 0 and (epoch % FLAGS.TARGET_NETWORK_UPDATE_FREQUENCY == 0):
             print "Swapping Network"
             main_agent.sync_target(session)
-            saver.save(session, "/output/model.ckpt", global_step=epoch)
-            evaluate(session)
 
-    saver.save(session, "/output/model.ckpt", global_step=42)
+    saver.save(session, "/output/model_done.ckpt")
 
 if __name__ == '__main__':
     tf.app.run()
