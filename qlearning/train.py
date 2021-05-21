@@ -11,9 +11,9 @@ tf.app.flags.DEFINE_float("DISCOUNT_FACTOR", 0.99, "Amount to discount future re
 tf.app.flags.DEFINE_integer("PLAY_FRAMES", 4, "Number of frames to play before training a batch.")
 tf.app.flags.DEFINE_integer("ACTION_REPETITION", 4, "Number of frames to repeat the action while playing.")
 tf.app.flags.DEFINE_integer("HISTORY_SIZE", 4, "Number of frames of past history to model game state.")
-tf.app.flags.DEFINE_integer("HISTORY_WIDTH", 80, "Width of the input frame.")
+tf.app.flags.DEFINE_integer("HISTORY_WIDTH", 105, "Width of the input frame.")
 tf.app.flags.DEFINE_integer("HISTORY_HEIGHT", 80, "Height of the input frame.")
-tf.app.flags.DEFINE_integer("ACTION_SPACE", 3, "Number of possible output actions.")
+tf.app.flags.DEFINE_integer("ACTION_SPACE", 6, "Number of possible output actions.")
 tf.app.flags.DEFINE_integer("REPLAY_MEMORY_LENGTH", 500000, "Number of historical experiences to store.")
 tf.app.flags.DEFINE_integer("MIN_REPLAY_MEMORY_LENGTH", 50000, "Minimum number of experiences to start training.")
 tf.app.flags.DEFINE_integer("BATCH_SIZE", 32, "Size of mini-batch.")
@@ -34,13 +34,13 @@ FLAGS = tf.app.flags.FLAGS
 
 observation_shape = (FLAGS.HISTORY_WIDTH, FLAGS.HISTORY_HEIGHT, FLAGS.HISTORY_SIZE)
 replay_memory = ReplayMemory(FLAGS.REPLAY_MEMORY_LENGTH, observation_shape)
-game = Game('BreakoutNoFrameskip-v0', observation_shape, FLAGS.ACTION_REPETITION)
+game = Game('SpaceInvaders-v0', observation_shape, FLAGS.ACTION_REPETITION)
 target_agent = DQNAgent("target_agent", observation_shape, FLAGS.ACTION_SPACE, FLAGS.DISCOUNT_FACTOR)
 main_agent = DQNAgent("dqn_agent", observation_shape, FLAGS.ACTION_SPACE, FLAGS.DISCOUNT_FACTOR, target_agent)
 
 
 def epsilon(epoch):
-    return (((FLAGS.EPSILON_END - FLAGS.EPSILON_START) / FLAGS.EPSILON_END_EPOCH) * epoch + 1) if epoch < FLAGS.EPSILON_END_EPOCH else FLAGS.EPSILON_END
+    return (((FLAGS.EPSILON_END - FLAGS.EPSILON_START) / FLAGS.EPSILON_END_EPOCH) * epoch + FLAGS.EPSILON_START) if epoch < FLAGS.EPSILON_END_EPOCH else FLAGS.EPSILON_END
 
 
 def store_data(state_data):
@@ -81,6 +81,7 @@ def main(_):
     session.run(tf.global_variables_initializer())
     main_agent.sync_target(session)
     saver = tf.train.Saver()
+    #saver.restore(session, './checkpoint/model.ckpt-1100000')
 
     for epoch in xrange(FLAGS.EPOCHS):
         if epoch % 1000 == 0:

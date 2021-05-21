@@ -16,9 +16,7 @@ class History():
         # Downsample
         temp = temp[::2, ::2]
 
-        # Crop
-
-        return temp[17:-8, :]
+        return temp
 
     @classmethod
     def new_observation(cls, state, raw_frame):

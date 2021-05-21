@@ -11,4 +11,3 @@ setup(
     include_package_data=True,
     description='My trainer application package.'
 )
-

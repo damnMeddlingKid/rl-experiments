@@ -25,8 +25,7 @@ class DQNAgent(object):
             self._terminal = tf.placeholder(tf.float32, shape=[None], name="terminal")
 
             if target_agent:
-                self.manual_input = tf.placeholder(tf.float32, shape=[None, 4])
-                self._loss = self._loss_function() #self._loss_function()
+                self._loss = self._loss_function(action_space) #self._loss_function()
                 self._update = self._optimizer(self._loss, name)
 
         self._merged_summaries = tf.summary.merge_all()
@@ -37,7 +36,7 @@ class DQNAgent(object):
     @staticmethod
     def build_model(name, observation_shape, action_shape):
         with tf.variable_scope(name):
-            #initializer = tf.truncated_normal_initializer(0, 0.02)
+            initializer = tf.truncated_normal_initializer(0, 0.01)
             observation = tf.placeholder(tf.float32, (None,) + observation_shape, 'input_state')
 
             conv1 = tf.layers.conv2d(
@@ -48,6 +47,7 @@ class DQNAgent(object):
                 padding='valid',
                 activation=tf.nn.relu,
                 name="conv1",
+                kernel_initializer=initializer
             )
 
             conv2 = tf.layers.conv2d(
@@ -58,6 +58,7 @@ class DQNAgent(object):
                 padding='valid',
                 activation=tf.nn.relu,
                 name="conv2",
+                kernel_initializer=initializer
             )
 
             conv3 = tf.layers.conv2d(
@@ -67,18 +68,19 @@ class DQNAgent(object):
                 padding='valid',
                 activation=tf.nn.relu,
                 name="conv3",
+                kernel_initializer=initializer
             )
 
             flat = tf.contrib.layers.flatten(conv3)
 
-            dense1 = tf.layers.dense(flat, 512, activation=tf.nn.relu, name="dense1")
-            dense2 = tf.layers.dense(dense1, action_shape, name="q_value")
+            dense1 = tf.layers.dense(flat, 512, activation=tf.nn.relu, name="dense1", kernel_initializer=initializer)
+            dense2 = tf.layers.dense(dense1, action_shape, name="q_value", kernel_initializer=initializer)
 
             return observation, dense2
 
-    def _loss_function(self):
+    def _loss_function(self, action_space):
         assert self._target_agent is not None, "Attempting to train agent without target"
-        one_hot = tf.one_hot(self._action, 3, dtype=tf.float32)
+        one_hot = tf.one_hot(self._action, action_space, dtype=tf.float32)
         prediction = tf.reduce_sum(tf.multiply(one_hot, self.q_value), axis=1)
         target = self._reward + ((1 - self._terminal) * tf.scalar_mul(self._discount, tf.reduce_max(self._target_agent.q_value, axis=1)))
         loss = tf.reduce_mean(self.clipped_error(target - prediction))
